@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+    <color name="hb_red">#cc292b</color>
+    <color name="hb_dark">#1a1a1a</color>
+    <color name="hb_dark_card">#2a2a2a</color>
+    <color name="hb_gray">#888888</color>
+</resources>
