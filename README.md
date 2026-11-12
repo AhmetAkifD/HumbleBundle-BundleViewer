@@ -10,21 +10,21 @@ An Android app that lists the current bundles on [Humble Bundle](https://www.hum
 
 ### Features
 
-- **Bundle list:** cover image, name, publisher, short description, starting price, item count, total value and time left for every active bundle.
+- **Bundle list:** cover image with logo, name, included items, starting price, item count, total value and time left for every active bundle.
 - **Category filters:** All / Games / Books / Software.
-- **Sorted by deadline:** bundles ending soonest come first. Bundles with less than 2 days left are highlighted, and bundles started in the last 3 days get a **NEW** badge.
+- **Sorting:** by deadline (default), lowest price, highest value or most items. Bundles with less than 2 days left are highlighted.
 - **Refresh:** tap the refresh button in the top bar or pull down on the list.
 - **Bundle details:** tap a bundle to see every price tier and the items it unlocks, with image, type, platforms and individual price.
 - **Open in browser:** jump to the bundle's page on Humble Bundle to buy it.
 
 ### How it works
 
-Humble Bundle pages embed their data as JSON inside `<script type="application/json">` tags. Instead of scraping the rendered HTML, the app downloads the page and reads that JSON:
+humblebundle.com is a Next.js app. Each page streams its data as a React Server Components payload inside `self.__next_f.push(...)` scripts. Instead of scraping the rendered HTML, the app downloads the page, joins that payload and reads the JSON objects in it:
 
-- `/bundles` → `landingPage-json-data` for the list
-- each bundle page → `webpack-bundle-page-data` for tiers and items
+- `/bundles` → every `algolia-hit` object is one bundle card
+- each bundle page → the `bundlePage` object holds the tiers and items
 
-Prices are shown in the currency Humble Bundle picks for your location (e.g. ₺ in Turkey). If Humble Bundle changes its page structure, the parser in `BundleScraper.kt` may need updating.
+Prices are shown in US dollars, as the website serves them. If Humble Bundle changes its page structure, the parser in `BundleScraper.kt` may need updating.
 
 ### Tech stack
 
@@ -73,21 +73,21 @@ This is an unofficial, personal project and is not affiliated with or endorsed b
 
 ### Özellikler
 
-- **Bundle listesi:** Her aktif bundle için kapak görseli, isim, yayıncı, kısa açıklama, başlangıç fiyatı, ürün sayısı, toplam değer ve kalan süre.
+- **Bundle listesi:** Her aktif bundle için logolu kapak görseli, isim, içindeki ürünler, başlangıç fiyatı, ürün sayısı, toplam değer ve kalan süre.
 - **Kategori filtreleri:** Tümü / Oyun / Kitap / Yazılım.
-- **Bitiş tarihine göre sıralama:** En yakında bitecek bundle'lar en üstte. 2 günden az kalanlar vurgulanır, son 3 günde çıkanlar **YENİ** etiketi alır.
+- **Sıralama:** Bitişi en yakın (varsayılan), en ucuz, en yüksek değer veya en çok ürün. 2 günden az kalanlar vurgulanır.
 - **Yenileme:** Üst çubuktaki yenile butonuna bas ya da listeyi aşağı çek.
 - **Bundle detayı:** Bir bundle'a dokununca tüm fiyat kademelerini ve her kademede açılan ürünleri görsel, tür, platform ve tek başına fiyatıyla görürsün.
 - **Tarayıcıda aç:** Satın almak için bundle'ın Humble Bundle sayfasına git.
 
 ### Nasıl çalışıyor
 
-Humble Bundle sayfaları verilerini `<script type="application/json">` etiketleri içinde JSON olarak gömüyor. Uygulama HTML kazımak yerine sayfayı indirip bu JSON'u okuyor:
+humblebundle.com bir Next.js uygulaması. Her sayfa verisini `self.__next_f.push(...)` betikleri içinde React Server Components akışı olarak gönderiyor. Uygulama HTML kazımak yerine sayfayı indirip bu akışı birleştiriyor ve içindeki JSON nesnelerini okuyor:
 
-- `/bundles` → liste için `landingPage-json-data`
-- her bundle sayfası → kademeler ve ürünler için `webpack-bundle-page-data`
+- `/bundles` → her `algolia-hit` nesnesi bir bundle kartı
+- her bundle sayfası → `bundlePage` nesnesi kademeleri ve ürünleri içeriyor
 
-Fiyatlar Humble Bundle'ın konumuna göre seçtiği para biriminde gösterilir (örneğin Türkiye'de ₺). Humble Bundle sayfa yapısını değiştirirse `BundleScraper.kt` içindeki ayrıştırıcının güncellenmesi gerekebilir.
+Fiyatlar sitenin gösterdiği gibi ABD doları olarak gösterilir. Humble Bundle sayfa yapısını değiştirirse `BundleScraper.kt` içindeki ayrıştırıcının güncellenmesi gerekebilir.
 
 ### Kullanılan teknolojiler
 

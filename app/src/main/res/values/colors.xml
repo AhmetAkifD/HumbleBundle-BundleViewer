@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="background">#121418</color>
-    <color name="humble_red">#E5484D</color>
+    <color name="background">#0F1729</color>
+    <color name="humble_violet">#7C3BED</color>
 </resources>

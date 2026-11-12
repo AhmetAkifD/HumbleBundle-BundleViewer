@@ -6,8 +6,9 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,11 +22,14 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.Sort
+import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.CloudOff
 import androidx.compose.material.icons.outlined.Inventory2
 import androidx.compose.material.icons.outlined.Refresh
@@ -33,15 +37,18 @@ import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -57,6 +64,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
@@ -66,6 +74,20 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 
+enum class SortOrder(val label: String) {
+    ENDING("Bitişi en yakın"),
+    PRICE("En ucuz"),
+    VALUE("En yüksek değer"),
+    ITEMS("En çok ürün"),
+}
+
+private fun List<BundleSummary>.sortedBy(order: SortOrder) = when (order) {
+    SortOrder.ENDING -> sortedBy { it.endDate }
+    SortOrder.PRICE -> sortedBy { it.price?.amount ?: Double.MAX_VALUE }
+    SortOrder.VALUE -> sortedByDescending { it.value?.amount ?: 0.0 }
+    SortOrder.ITEMS -> sortedByDescending { it.itemCount }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ListScreen(
@@ -74,11 +96,11 @@ fun ListScreen(
     onOpen: (BundleSummary) -> Unit,
 ) {
     var filterKey by rememberSaveable { mutableStateOf<String?>(null) }
+    var sortName by rememberSaveable { mutableStateOf(SortOrder.ENDING.name) }
+    val sort = SortOrder.valueOf(sortName)
     val filter = filterKey?.let(BundleCategory::fromKey)
-    val visible = remember(state.bundles, filter) {
-        state.bundles
-            .filter { filter == null || it.category == filter }
-            .sortedBy { it.endDate }
+    val visible = remember(state.bundles, filter, sort) {
+        state.bundles.filter { filter == null || it.category == filter }.sortedBy(sort)
     }
     val snackbar = remember { SnackbarHostState() }
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
@@ -96,7 +118,7 @@ fun ListScreen(
                 scrollBehavior = scrollBehavior,
                 title = {
                     Column {
-                        Text("Humble Bundles", fontWeight = FontWeight.Bold)
+                        Text("Humble Bundles", fontWeight = FontWeight.ExtraBold)
                         val subtitle = when {
                             state.isLoading -> "Yenileniyor…"
                             state.lastUpdated != null ->
@@ -112,7 +134,10 @@ fun ListScreen(
                         }
                     }
                 },
-                actions = { RefreshButton(isLoading = state.isLoading, onClick = onRefresh) },
+                actions = {
+                    SortButton(sort, onSelect = { sortName = it.name })
+                    RefreshButton(isLoading = state.isLoading, onClick = onRefresh)
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer,
                 ),
@@ -154,6 +179,30 @@ fun ListScreen(
 }
 
 @Composable
+private fun SortButton(current: SortOrder, onSelect: (SortOrder) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        IconButton(onClick = { open = true }) {
+            Icon(Icons.AutoMirrored.Outlined.Sort, contentDescription = "Sırala")
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            SortOrder.entries.forEach { order ->
+                DropdownMenuItem(
+                    text = { Text(order.label) },
+                    leadingIcon = {
+                        if (order == current) Icon(Icons.Outlined.Check, null) else Spacer(Modifier.size(24.dp))
+                    },
+                    onClick = {
+                        onSelect(order)
+                        open = false
+                    },
+                )
+            }
+        }
+    }
+}
+
+@Composable
 fun RefreshButton(isLoading: Boolean, onClick: () -> Unit) {
     val rotation = if (isLoading) {
         val transition = rememberInfiniteTransition(label = "refresh")
@@ -176,12 +225,18 @@ private fun CategoryFilters(
     onSelect: (BundleCategory?) -> Unit,
 ) {
     val counts = bundles.groupingBy { it.category }.eachCount()
+    val chipColors = FilterChipDefaults.filterChipColors(
+        selectedContainerColor = MaterialTheme.colorScheme.primary,
+        selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
+    )
     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         item {
             FilterChip(
                 selected = selected == null,
                 onClick = { onSelect(null) },
                 label = { Text("Tümü · ${bundles.size}") },
+                colors = chipColors,
+                shape = RoundedCornerShape(50),
             )
         }
         items(BundleCategory.entries) { category ->
@@ -189,6 +244,8 @@ private fun CategoryFilters(
                 selected = selected == category,
                 onClick = { onSelect(category) },
                 label = { Text("${category.label} · ${counts[category] ?: 0}") },
+                colors = chipColors,
+                shape = RoundedCornerShape(50),
             )
         }
     }
@@ -198,130 +255,160 @@ private fun CategoryFilters(
 private fun BundleCard(bundle: BundleSummary, onClick: () -> Unit) {
     Card(
         onClick = onClick,
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(12.dp),
+        border = BorderStroke(1.dp, CardBorder),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
     ) {
-        Box {
-            AsyncImage(
-                model = bundle.imageUrl,
-                contentDescription = bundle.name,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(616f / 353f)
-                    .background(MaterialTheme.colorScheme.surfaceContainerHighest),
-            )
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                modifier = Modifier.padding(10.dp),
-            ) {
-                Badge(bundle.category.label, Color.Black.copy(alpha = 0.65f), Color.White)
-                if (bundle.isNew()) Badge("YENİ", NewGreen, Color.Black)
-            }
-            bundle.timeLeft()?.let { left ->
-                val urgent = left.toDays() < 2
-                Badge(
-                    text = left.formatRemaining(),
-                    background = if (urgent) UrgentOrange else Color.Black.copy(alpha = 0.65f),
-                    content = if (urgent) Color.Black else Color.White,
-                    icon = true,
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(10.dp),
-                )
-            }
+        CoverArt(
+            imageUrl = bundle.imageUrl,
+            logoUrl = bundle.logoUrl,
+            contentDescription = bundle.name,
+        ) {
+            Pill(bundle.category.label, Color.Black.copy(alpha = 0.6f), Color.White, Modifier.padding(10.dp))
         }
         Column(Modifier.padding(16.dp)) {
             Text(
                 bundle.name,
                 style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
+                fontWeight = FontWeight.ExtraBold,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
-            if (bundle.author.isNotBlank()) {
+            if (bundle.itemTitles.isNotEmpty()) {
+                Spacer(Modifier.height(6.dp))
                 Text(
-                    bundle.author,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            if (bundle.blurb.isNotBlank()) {
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    bundle.blurb,
+                    includedItemsText(bundle.itemTitles, bundle.itemCount),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(8.dp))
+            Text(
+                listOfNotNull(
+                    "${bundle.itemCount} ürün".takeIf { bundle.itemCount > 0 },
+                    bundle.value?.let { "${it.format()} değerinde" },
+                ).joinToString(" • "),
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+            )
+            Spacer(Modifier.height(14.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                bundle.priceText?.let { PricePill("$it+") }
-                Spacer(Modifier.width(12.dp))
-                Column(Modifier.weight(1f)) {
-                    bundle.itemCountText?.let {
-                        Text(it, style = MaterialTheme.typography.labelLarge)
-                    }
-                    bundle.valueText?.let {
-                        Text(
-                            it,
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
+                bundle.price?.let { PriceBlock(it, Modifier.weight(1f)) } ?: Spacer(Modifier.weight(1f))
+                timeLeft(bundle.endDate)?.let { TimeLeftPill(it) }
             }
         }
     }
 }
 
+private fun includedItemsText(titles: List<String>, total: Int): String {
+    val shown = titles.take(4)
+    val rest = maxOf(total, titles.size) - shown.size
+    return "İçinde: " + shown.joinToString(", ") + if (rest > 0) " ve $rest ürün daha" else ""
+}
+
+/** Cover art with a darkening gradient and the bundle logo over it, like the website cards. */
 @Composable
-fun PricePill(text: String, modifier: Modifier = Modifier) {
-    Surface(
-        color = MaterialTheme.colorScheme.primary,
-        contentColor = MaterialTheme.colorScheme.onPrimary,
-        shape = RoundedCornerShape(10.dp),
-        modifier = modifier,
+fun CoverArt(
+    imageUrl: String?,
+    logoUrl: String?,
+    contentDescription: String,
+    modifier: Modifier = Modifier,
+    overlay: @Composable () -> Unit = {},
+) {
+    Box(
+        modifier
+            .fillMaxWidth()
+            .aspectRatio(16f / 9f)
+            .background(MaterialTheme.colorScheme.surfaceContainerHighest),
     ) {
+        AsyncImage(
+            model = imageUrl,
+            contentDescription = contentDescription,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize(),
+        )
+        if (logoUrl != null) {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            0.45f to Color.Transparent,
+                            1f to Color(0xE60F1729),
+                        ),
+                    ),
+            )
+            AsyncImage(
+                model = logoUrl,
+                contentDescription = null,
+                contentScale = ContentScale.Fit,
+                alignment = Alignment.BottomStart,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(12.dp)
+                    .height(52.dp)
+                    .widthIn(max = 220.dp),
+            )
+        }
+        overlay()
+    }
+}
+
+@Composable
+fun PriceBlock(price: Money, modifier: Modifier = Modifier) {
+    Column(modifier) {
         Text(
-            text,
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+            "İstediğin kadar öde",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            "${price.format()}+",
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.ExtraBold,
+            color = HumbleVioletLight,
         )
     }
 }
 
 @Composable
-fun Badge(
-    text: String,
-    background: Color,
-    content: Color,
-    modifier: Modifier = Modifier,
-    icon: Boolean = false,
-) {
+fun TimeLeftPill(left: java.time.Duration, modifier: Modifier = Modifier) {
+    val urgent = left.isUrgent()
+    val color = if (urgent) UrgentOrange else MaterialTheme.colorScheme.onSurface
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
-            .clip(RoundedCornerShape(8.dp))
+            .clip(RoundedCornerShape(6.dp))
+            .border(1.dp, if (urgent) UrgentOrange else CardBorder, RoundedCornerShape(6.dp))
+            .padding(horizontal = 10.dp, vertical = 6.dp),
+    ) {
+        Icon(Icons.Outlined.Schedule, null, tint = color, modifier = Modifier.size(14.dp))
+        Spacer(Modifier.width(6.dp))
+        Text(left.formatRemaining(), color = color, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+    }
+}
+
+@Composable
+fun Pill(text: String, background: Color, content: Color, modifier: Modifier = Modifier) {
+    Text(
+        text,
+        color = content,
+        style = MaterialTheme.typography.labelMedium,
+        fontWeight = FontWeight.Bold,
+        modifier = modifier
+            .clip(RoundedCornerShape(6.dp))
             .background(background)
             .padding(horizontal = 8.dp, vertical = 4.dp),
-    ) {
-        if (icon) {
-            Icon(Icons.Outlined.Schedule, null, tint = content, modifier = Modifier.size(14.dp))
-            Spacer(Modifier.width(4.dp))
-        }
-        Text(text, color = content, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
-    }
+    )
 }
 
 @Composable
 fun LoadingView() {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            androidx.compose.material3.CircularProgressIndicator()
+            CircularProgressIndicator()
             Spacer(Modifier.height(16.dp))
             Text("Bundle'lar yükleniyor…", color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
@@ -352,7 +439,7 @@ fun ErrorView(message: String, onRetry: () -> Unit) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(Modifier.height(20.dp))
-        Button(onClick = onRetry) { Text("Tekrar dene") }
+        Button(onClick = onRetry, shape = RoundedCornerShape(6.dp)) { Text("Tekrar dene") }
     }
 }
 
